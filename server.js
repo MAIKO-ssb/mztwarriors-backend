@@ -15,7 +15,7 @@ const io = new Server(server, {
 
 // Health check so Railway never sleeps
 app.get('/', (req, res) => {
-  res.send('MZT Warriors multiplayer server - LIVE from Tijuana');
+  res.send('MZT Warriors Multiplayer Server - LIVE from the Manzanita Forest!');
 });
 
 const players = {};
