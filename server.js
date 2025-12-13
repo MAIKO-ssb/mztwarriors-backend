@@ -1,4 +1,4 @@
-// server.js - PURE backend for Railway.app (NO NEXT.JS)
+// server.js — ONE FILE TO RULE THEM ALL (local + Render + future hosts)
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -6,6 +6,7 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
+// CORS — safe but open enough for dev + production
 const io = new Server(server, {
   cors: {
     origin: "*", // We'll tighten this later with your Vercel URL
@@ -13,9 +14,14 @@ const io = new Server(server, {
   }
 });
 
-// Health check so Railway never sleeps
+// Health check + nice page (keeps Render awake and Railway awake)
 app.get('/', (req, res) => {
-  res.send('MZT Warriors Multiplayer Server - LIVE from the Manzanita Forest!');
+  res.send(`
+    <h1>MZT Warriors Multiplayer Server — LIVE</h1>
+    <p>Players online: ${io.engine.clientsCount}</p>
+    <p>Time: ${new Date().toLocaleString()}</p>
+    <p>Deployed on Render • Local dev ready</p>
+  `);
 });
 
 const players = {};
@@ -23,37 +29,37 @@ const players = {};
 io.on('connection', (socket) => {
   console.log('Player connected:', socket.id);
 
-  // Create player
+  // Create player — better spawn point (center of your world)
   players[socket.id] = {
     id: socket.id,
-    position: { x: 100, y: 650 },
+    position: { x: 640, y: 500 },
     direction: 'right',
     isMoving: false,
     isAirborne: false
   };
 
+  // Send existing players to the new one
+  socket.emit('currentPlayers', Object.values(players).filter(p => p.id !== socket.id));
+
   // Tell everyone else about the new player
   socket.broadcast.emit('newPlayer', players[socket.id]);
-  // Tell the new player about everyone else
-  socket.emit('currentPlayers', Object.values(players).filter(p => p.id !== socket.id));
 
   // === ALL YOUR EVENTS BELOW (exactly as before) ===
   socket.on('newPlayer', (data) => {
-    if (players[socket.id]) {
-      players[socket.id].position = {
-        x: data.x && Number.isFinite(data.x) ? data.x : 100,
-        y: data.y && Number.isFinite(data.y) ? data.y : 650
-      };
-      socket.broadcast.emit('newPlayer', players[socket.id]);
-    }
+    if (!players[socket.id]) return;
+    players[socket.id].position = {
+      x: Number.isFinite(data.x) ? data.x : 640,
+      y: Number.isFinite(data.y) ? data.y : 500
+    };
+    socket.broadcast.emit('newPlayer', players[socket.id]);
   });
 
   socket.on('playerMovement', (data) => {
     if (!players[socket.id]) return;
     const p = players[socket.id];
     p.position = {
-      x: data.position?.x && Number.isFinite(data.position.x) ? data.position.x : p.position.x,
-      y: data.position?.y && Number.isFinite(data.position.y) ? data.position.y : p.position.y
+      x: Number.isFinite(data.position?.x) ? data.position.x : p.position.x,
+      y: Number.isFinite(data.position?.y) ? data.position.y : p.position.y
     };
     p.direction = data.direction || 'right';
     p.isMoving = !!data.isMoving;
@@ -72,8 +78,8 @@ io.on('connection', (socket) => {
     if (!players[socket.id]) return;
     const p = players[socket.id];
     p.position = {
-      x: data.position?.x && Number.isFinite(data.position.x) ? data.position.x : p.position.x,
-      y: data.position?.y && Number.isFinite(data.position.y) ? data.position.y : p.position.y
+      x: Number.isFinite(data.position?.x) ? data.position.x : p.position.x,
+      y: Number.isFinite(data.position?.y) ? data.position.y : p.position.y
     };
     p.direction = data.direction || 'right';
     p.isAirborne = true;
@@ -82,7 +88,7 @@ io.on('connection', (socket) => {
       id: socket.id,
       position: p.position,
       direction: p.direction,
-      velocityY: data.velocityY || 0
+      velocityY: data.velocityY || -500
     });
   });
 
@@ -90,8 +96,8 @@ io.on('connection', (socket) => {
     if (!players[socket.id]) return;
     const p = players[socket.id];
     p.position = {
-      x: data.position?.x && Number.isFinite(data.position.x) ? data.position.x : p.position.x,
-      y: data.position?.y && Number.isFinite(data.position.y) ? data.position.y : p.position.y
+      x: Number.isFinite(data.position?.x) ? data.position.x : p.position.x,
+      y: Number.isFinite(data.position?.y) ? data.position.y : p.position.y
     };
     p.direction = data.direction || 'right';
     p.isAirborne = !!data.isAirborne;
@@ -104,8 +110,8 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('chatMessage', (message) => {
-    io.emit('chatMessageReceived', message);
+  socket.on('chatMessage', (msg) => {
+    io.emit('chatMessageReceived', { ...msg, id: socket.id });
   });
 
   socket.on('disconnect', () => {
@@ -115,8 +121,11 @@ io.on('connection', (socket) => {
   });
 });
 
-// CRITICAL: Use Railway's PORT
-const PORT = process.env.PORT || 4000;
+// THIS LINE IS CRITICAL — works on Render, Railway, local, everywhere
+const PORT = process.env.PORT || 3000;
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`MZT Warriors backend running on port ${PORT}`);
+  console.log(`→ Local: http://localhost:${PORT}`);
+  console.log(`→ Render: https://mztwarriors-backend.onrender.com`);
 });
